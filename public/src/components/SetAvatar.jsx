@@ -7,10 +7,16 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import { setAvatarRoute } from "../utils/APIRoutes";
+
+const DICEBEAR_API = `https://api.dicebear.com/9.x/adventurer/svg`;
+
+function generateRandomSeed(length = 10) {
+  return Math.random().toString(36).substring(2, 2 + length);
+}
+
 export default function SetAvatar() {
-  const api = `https://api.multiavatar.com/4645646`;
   const navigate = useNavigate();
-  const [avatars, setAvatars] = useState([]);
+  const [avatars, setAvatars] = useState([]);   // array of { seed, base64 }
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAvatar, setSelectedAvatar] = useState(undefined);
   const toastOptions = {
@@ -21,9 +27,28 @@ export default function SetAvatar() {
     theme: "dark",
   };
 
-  useEffect(async () => {
+  useEffect(() => {
     if (!localStorage.getItem(process.env.REACT_APP_LOCALHOST_KEY))
       navigate("/login");
+  }, [navigate]);
+
+  const fetchAvatars = async () => {
+    setIsLoading(true);
+    setSelectedAvatar(undefined);
+    const data = [];
+    for (let i = 0; i < 12; i++) {
+      const seed = generateRandomSeed();
+      const url = `${DICEBEAR_API}?seed=${seed}`;
+      const response = await axios.get(url, { responseType: "arraybuffer" });
+      const base64 = Buffer.from(response.data).toString("base64");
+      data.push({ seed, base64 });
+    }
+    setAvatars(data);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchAvatars();
   }, []);
 
   const setProfilePicture = async () => {
@@ -35,7 +60,7 @@ export default function SetAvatar() {
       );
 
       const { data } = await axios.post(`${setAvatarRoute}/${user._id}`, {
-        image: avatars[selectedAvatar],
+        image: avatars[selectedAvatar].base64,
       });
 
       if (data.isSet) {
@@ -52,18 +77,6 @@ export default function SetAvatar() {
     }
   };
 
-  useEffect(async () => {
-    const data = [];
-    for (let i = 0; i < 4; i++) {
-      const image = await axios.get(
-        `${api}/${Math.round(Math.random() * 1000)}`
-      );
-      const buffer = new Buffer(image.data);
-      data.push(buffer.toString("base64"));
-    }
-    setAvatars(data);
-    setIsLoading(false);
-  }, []);
   return (
     <>
       {isLoading ? (
@@ -76,26 +89,27 @@ export default function SetAvatar() {
             <h1>Pick an Avatar as your profile picture</h1>
           </div>
           <div className="avatars">
-            {avatars.map((avatar, index) => {
-              return (
-                <div
-                  className={`avatar ${
-                    selectedAvatar === index ? "selected" : ""
-                  }`}
-                >
-                  <img
-                    src={`data:image/svg+xml;base64,${avatar}`}
-                    alt="avatar"
-                    key={avatar}
-                    onClick={() => setSelectedAvatar(index)}
-                  />
-                </div>
-              );
-            })}
+            {avatars.map(({ seed, base64 }, index) => (
+              <div
+                key={seed}
+                className={`avatar ${selectedAvatar === index ? "selected" : ""}`}
+                onClick={() => setSelectedAvatar(index)}
+              >
+                <img
+                  src={`data:image/svg+xml;base64,${base64}`}
+                  alt={`Avatar with seed ${seed}`}
+                />
+              </div>
+            ))}
           </div>
-          <button onClick={setProfilePicture} className="submit-btn">
-            Set as Profile Picture
-          </button>
+          <div className="button-row">
+            <button onClick={fetchAvatars} className="reload-btn">
+              Generate New Avatars
+            </button>
+            <button onClick={setProfilePicture} className="submit-btn">
+              Set as Profile Picture
+            </button>
+          </div>
           <ToastContainer />
         </Container>
       )}
@@ -122,9 +136,11 @@ const Container = styled.div`
       color: white;
     }
   }
+
   .avatars {
-    display: flex;
-    gap: 2rem;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
 
     .avatar {
       border: 0.4rem solid transparent;
@@ -134,15 +150,40 @@ const Container = styled.div`
       justify-content: center;
       align-items: center;
       transition: 0.5s ease-in-out;
+      cursor: pointer;
       img {
         height: 6rem;
         transition: 0.5s ease-in-out;
       }
     }
+
     .selected {
       border: 0.4rem solid #4e0eff;
     }
   }
+
+  .button-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+  }
+
+  .reload-btn {
+    background-color: transparent;
+    color: #4e0eff;
+    padding: 1rem 2rem;
+    border: 0.15rem solid #4e0eff;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 0.4rem;
+    font-size: 1rem;
+    text-transform: uppercase;
+    transition: background-color 0.3s ease;
+    &:hover {
+      background-color: #4e0eff22;
+    }
+  }
+
   .submit-btn {
     background-color: #4e0eff;
     color: white;
